@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from typing import List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -15,6 +16,7 @@ from src.data_pipeline import (
     calculate_custom_set_stats,
     load_armor_dataframe,
     load_armor_sets_dataframe,
+    load_decorations_dataframe,
     load_skills_dataframe,
 )
 
@@ -145,7 +147,7 @@ st.markdown(
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         font-weight: 700 !important;
-        font-size: 0.85rem !important;
+        font-size: 0.83rem !important;
         color: #4a3723 !important;
     }
 
@@ -225,7 +227,8 @@ st.markdown(
         border-radius: 8px;
         padding: 8px 10px;
         margin-top: 4px;
-        min-height: 68px;
+        margin-bottom: 6px;
+        min-height: 62px;
         font-size: 0.78rem;
         line-height: 1.45;
     }
@@ -237,6 +240,24 @@ st.markdown(
     .part-info-skills {
         color: #3b2a18;
         word-break: keep-all;
+    }
+    .deco-slot-header {
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: #6e5536;
+        margin: 6px 0 4px 0;
+        padding-top: 4px;
+        border-top: 1px dashed #dccbb2;
+    }
+    .no-slot-badge {
+        font-size: 0.75rem;
+        color: #9c886e;
+        background: rgba(0, 0, 0, 0.03);
+        border: 1px dashed #d5c4aa;
+        border-radius: 6px;
+        padding: 6px 8px;
+        text-align: center;
+        margin-top: 6px;
     }
     .section-title {
         font-family: 'Noto Serif KR', serif;
@@ -255,12 +276,9 @@ st.markdown(
        📱 모바일 폰 맞춤 반응형 스타일 (화면 폭 768px 이하 스마트폰 최적화)
        ======================================================================= */
     @media (max-width: 768px) {
-        /* 모바일 화면 여백 최소화로 가독성 및 화면 활용 극대화 */
         .block-container {
             padding: 0.8rem 0.6rem 2rem !important;
         }
-
-        /* 상단 배너 컴팩트 모바일 레이아웃 */
         .wilds-hero-banner {
             padding: 14px 16px !important;
             flex-direction: column !important;
@@ -297,8 +315,6 @@ st.markdown(
             font-size: 0.7rem !important;
             padding: 3px 8px !important;
         }
-
-        /* 탭 버튼 터치 영역 및 글자 크기 모바일 최적화 */
         div[data-baseweb="tab-list"] {
             gap: 4px !important;
             overflow-x: auto !important;
@@ -309,8 +325,6 @@ st.markdown(
             padding: 8px 12px !important;
             white-space: nowrap !important;
         }
-
-        /* 메트릭 카드 모바일 컴팩트 스타일 */
         div[data-testid="stMetric"] {
             min-height: 68px !important;
             padding: 8px 12px !important;
@@ -322,13 +336,9 @@ st.markdown(
         div[data-testid="stMetricValue"] > div {
             font-size: 1.15rem !important;
         }
-
-        /* 양피지 카드 패딩 모바일 최적화 */
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-radius: 8px !important;
         }
-
-        /* 시뮬레이터 파츠 요약 박스 */
         .part-info-box {
             min-height: auto !important;
             padding: 6px 8px !important;
@@ -339,8 +349,6 @@ st.markdown(
             font-size: 0.85rem !important;
             padding-bottom: 2px !important;
         }
-
-        /* 차트 상하 여백 모바일 축소 */
         .js-plotly-plot {
             margin: 0 auto !important;
         }
@@ -366,14 +374,17 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-        with st.spinner("길드 서고에서 장비 데이터를 불러오는 중..."):
+        with st.spinner("길드 서고에서 장비 및 장식주 데이터를 불러오는 중..."):
             armor_df = load_armor_dataframe("ko")
             armor_sets_df = load_armor_sets_dataframe("ko")
             skills_df, skill_lookup = load_skills_dataframe("ko")
+            decorations_df = load_decorations_dataframe("ko")
+            armor_decos_df = decorations_df[decorations_df["kind"] == "armor"].reset_index(drop=True)
 
         st.markdown("**📜 길드 서고 등록 현황**")
         st.metric("등록된 방어구 파츠", f"{len(armor_df):,} 개")
         st.metric("방어구 풀세트", f"{len(armor_sets_df):,} 종")
+        st.metric("방어구 / 무기 장식주", f"{len(decorations_df):,} 종")
         st.metric("전투/생존 스킬", f"{len(skills_df):,} 종")
 
         st.divider()
@@ -382,7 +393,7 @@ def main() -> None:
             st.rerun()
 
     # ------------------------------------------------------------------------
-    # 상단 히어로 배너 (Monster Hunter Wilds Guild Emblem & Banner)
+    # 상단 히어로 배너
     # ------------------------------------------------------------------------
     st.markdown(
         """
@@ -399,7 +410,7 @@ def main() -> None:
                 <div class="wilds-title-group">
                     <div class="en-label">MONSTER HUNTER WILDS · HUNTER'S SMITHY ARCHIVE</div>
                     <h1>몬스터헌터 와일즈 장비 대시보드</h1>
-                    <p>금지된 땅 조사단 방어구 상세 스탯 도감 & 5부위 커스텀 장비 시뮬레이터</p>
+                    <p>금지된 땅 조사단 5부위 방어구 & 장식주 커스텀 시뮬레이터 · 상세 스탯 도감</p>
                 </div>
             </div>
             <div class="wilds-badge-right">
@@ -414,12 +425,12 @@ def main() -> None:
         [
             "⚒️ 커스텀 장비 시뮬레이터",
             "📜 방어구 스탯 탐색기",
-            "📖 방어구 세트 & 스킬 도감",
+            "📖 세트 · 스킬 · 장식주 도감",
         ]
     )
 
     # ========================================================================
-    # 탭 1: 커스텀 장비 시뮬레이터
+    # 탭 1: 커스텀 장비 시뮬레이터 (5부위 방어구 + 부위별 장식주 장착)
     # ========================================================================
     with tab_builder:
         with st.container(border=True):
@@ -434,7 +445,7 @@ def main() -> None:
             with top_bar2:
                 st.markdown(
                     "<div style='padding-top: 26px; font-size: 0.88rem; color: #785a37;'>"
-                    "💡 풀세트 프리셋을 불러온 뒤 원하는 부위만 다른 파츠로 교체하여 커스텀 세트를 조합해 보세요."
+                    "💡 각 부위의 방어구를 고르면 보유한 슬롯(【3】/【2】/【1】)에 맞는 <b>방어구 장식주</b>를 직접 장착해 스킬을 합산할 수 있습니다."
                     "</div>",
                     unsafe_allow_html=True,
                 )
@@ -445,7 +456,7 @@ def main() -> None:
             if not matched.empty:
                 preset_row = matched.iloc[0]
 
-        # 5부위 선택 카드 영역
+        # 5부위 선택 및 부위별 장식주 슬롯 카드 영역
         part_keys = ["head", "chest", "arms", "waist", "legs"]
         part_labels = {
             "head": "👑 머리 (Head)",
@@ -456,9 +467,11 @@ def main() -> None:
         }
 
         selector_cols = st.columns(5, gap="small")
-        selected_pieces: list[pd.Series] = []
+        selected_pieces: List[pd.Series] = []
+        equipped_decorations: List[Tuple[str, pd.Series]] = []
 
         for idx, p_key in enumerate(part_keys):
+            part_kr = PART_KR_MAP[p_key]
             part_df = armor_df[armor_df["kind"] == p_key].sort_values(
                 by=["rarity", "defense_base", "name"], ascending=[False, False, True]
             )
@@ -503,6 +516,33 @@ def main() -> None:
                             """,
                             unsafe_allow_html=True,
                         )
+
+                        # 부위별 장식주 슬롯 렌더링
+                        piece_slots = chosen_row["slots"] if isinstance(chosen_row["slots"], list) else []
+                        if piece_slots:
+                            st.markdown(
+                                '<div class="deco-slot-header">💎 장식주 슬롯 장착</div>',
+                                unsafe_allow_html=True,
+                            )
+                            for s_idx, slot_lv in enumerate(piece_slots):
+                                compat_decos = armor_decos_df[armor_decos_df["slot"] <= int(slot_lv)]
+                                deco_options = ["(비어 있음)"] + compat_decos["display_label"].tolist()
+                                selected_deco_label = st.selectbox(
+                                    f"슬롯 {s_idx + 1} 【{slot_lv}】",
+                                    options=deco_options,
+                                    index=0,
+                                    key=f"deco_{p_key}_{chosen_row['id']}_{s_idx}",
+                                )
+                                if selected_deco_label != "(비어 있음)":
+                                    deco_row = compat_decos[
+                                        compat_decos["display_label"] == selected_deco_label
+                                    ].iloc[0]
+                                    equipped_decorations.append((part_kr, deco_row))
+                        else:
+                            st.markdown(
+                                '<div class="no-slot-badge">장식주 슬롯 없음</div>',
+                                unsafe_allow_html=True,
+                            )
                     else:
                         st.markdown(
                             """
@@ -514,8 +554,10 @@ def main() -> None:
                             unsafe_allow_html=True,
                         )
 
-        # 스탯 합산
-        sim_result = calculate_custom_set_stats(selected_pieces, skill_lookup)
+        # 스탯 + 장식주 스킬 합산
+        sim_result = calculate_custom_set_stats(
+            selected_pieces, skill_lookup, equipped_decorations=equipped_decorations
+        )
         res_dict = sim_result["resistances"]
         slot_sum = sim_result["slot_summary"]
         active_skills_df = sim_result["skills_df"]
@@ -524,13 +566,13 @@ def main() -> None:
         stat_c1, stat_c2, stat_c3, stat_c4 = st.columns(4)
         stat_c1.metric("🛡️ 총합 기본 방어력", f"{sim_result['total_def_base']:,}")
         stat_c2.metric("✨ 총합 최대 강화 방어력", f"{sim_result['total_def_max']:,}")
-        stat_c3.metric("🎯 발동 스킬 수", f"{len(active_skills_df)} 종")
+        stat_c3.metric("🎯 총 발동 스킬 수", f"{len(active_skills_df)} 종")
         stat_c4.metric(
-            "💎 장식주 슬롯 합계 (3 / 2 / 1레벨)",
-            f"{slot_sum[3]}개 / {slot_sum[2]}개 / {slot_sum[1]}개",
+            "💎 장식주 장착 현황 (3 / 2 / 1슬롯)",
+            f"{slot_sum['equipped']}/{slot_sum['total']}개 장착 ({slot_sum[3]}·{slot_sum[2]}·{slot_sum[1]})",
         )
 
-        # 시각화: 좌측 Radar Chart / 우측 Horizontal Bar Chart (몬헌 골드/브론즈 컬러 매칭)
+        # 시각화: 좌측 Radar Chart / 우측 Horizontal Bar Chart
         viz_col1, viz_col2 = st.columns([1.0, 1.2], gap="medium")
 
         with viz_col1:
@@ -601,11 +643,11 @@ def main() -> None:
         with viz_col2:
             with st.container(border=True):
                 st.markdown(
-                    '<div class="section-title">📊 발동 스킬 레벨 현황</div>',
+                    '<div class="section-title">📊 발동 스킬 레벨 현황 (방어구 + 장식주)</div>',
                     unsafe_allow_html=True,
                 )
                 if active_skills_df.empty:
-                    st.info("장착된 방어구에 발동 스킬이 없습니다.")
+                    st.info("장착된 방어구나 장식주에 발동 스킬이 없습니다.")
                 else:
                     plot_skills_df = active_skills_df.iloc[::-1].copy()
                     max_x = max(
@@ -613,26 +655,48 @@ def main() -> None:
                         5,
                     )
 
+                    has_deco_lv = (plot_skills_df["장식주 레벨"] > 0).any()
+                    has_overflow = (plot_skills_df["초과 레벨"] > 0).any()
+
                     fig_bar = go.Figure()
                     fig_bar.add_trace(
                         go.Bar(
                             y=plot_skills_df["스킬명"],
-                            x=plot_skills_df["유효 레벨"],
+                            x=plot_skills_df["방어구 레벨"],
                             orientation="h",
-                            name="유효 레벨",
+                            name="방어구 스킬",
                             marker=dict(color="#b47b22", cornerradius=4),
-                            text=plot_skills_df["레벨 표기"],
-                            textposition="outside",
+                            text=plot_skills_df["레벨 표기"] if not has_deco_lv else None,
+                            textposition="outside" if not has_deco_lv else "none",
                             cliponaxis=False,
-                            customdata=plot_skills_df[["발동 효과", "기여 부위"]],
+                            customdata=plot_skills_df[["발동 효과", "기여 부위", "레벨 표기"]],
                             hovertemplate=(
-                                "<b>%{y}</b> (%{text})<br>"
+                                "<b>%{y}</b> (%{customdata[2]})<br>"
                                 "효과: %{customdata[0]}<br>"
                                 "기여: %{customdata[1]}<extra></extra>"
                             ),
                         )
                     )
-                    if (plot_skills_df["초과 레벨"] > 0).any():
+                    if has_deco_lv:
+                        fig_bar.add_trace(
+                            go.Bar(
+                                y=plot_skills_df["스킬명"],
+                                x=plot_skills_df["장식주 레벨"],
+                                orientation="h",
+                                name="💎 장식주 추가 스킬",
+                                marker=dict(color="#0d9488", cornerradius=4),
+                                text=plot_skills_df["레벨 표기"],
+                                textposition="outside",
+                                cliponaxis=False,
+                                customdata=plot_skills_df[["발동 효과", "기여 부위"]],
+                                hovertemplate=(
+                                    "<b>%{y}</b> (장식주 +%{x})<br>"
+                                    "효과: %{customdata[0]}<br>"
+                                    "기여: %{customdata[1]}<extra></extra>"
+                                ),
+                            )
+                        )
+                    if has_overflow:
                         fig_bar.add_trace(
                             go.Bar(
                                 y=plot_skills_df["스킬명"],
@@ -653,7 +717,7 @@ def main() -> None:
                         font=dict(color="#2b2118", size=12),
                         xaxis=dict(
                             title="스킬 레벨",
-                            range=[0, max_x * 1.35],
+                            range=[0, max_x * 1.42],
                             dtick=1,
                             gridcolor="#dfd3c0",
                             linecolor="#cbb89d",
@@ -664,7 +728,7 @@ def main() -> None:
                             tickfont=dict(size=13, color="#2b2118"),
                         ),
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                        margin=dict(l=20, r=45, t=35, b=35),
+                        margin=dict(l=20, r=50, t=35, b=35),
                     )
                     st.plotly_chart(fig_bar, width="stretch")
 
@@ -672,7 +736,7 @@ def main() -> None:
         if not active_skills_df.empty:
             with st.container(border=True):
                 st.markdown(
-                    '<div class="section-title">✨ 발동 스킬 상세 효과 및 파츠 기여도</div>',
+                    '<div class="section-title">✨ 발동 스킬 상세 효과 및 파츠·장식주 기여도</div>',
                     unsafe_allow_html=True,
                 )
                 st.dataframe(
@@ -682,9 +746,9 @@ def main() -> None:
                     column_config={
                         "스킬명": st.column_config.TextColumn("스킬명", width="medium"),
                         "분류": st.column_config.TextColumn("분류", width="small"),
-                        "레벨 표기": st.column_config.TextColumn("달성 레벨", width="small"),
+                        "레벨 표기": st.column_config.TextColumn("달성 레벨", width="medium"),
                         "발동 효과": st.column_config.TextColumn("발동 효과 설명", width="large"),
-                        "기여 부위": st.column_config.TextColumn("기여 파츠", width="medium"),
+                        "기여 부위": st.column_config.TextColumn("기여 파츠 및 장식주", width="medium"),
                     },
                 )
 
@@ -843,11 +907,33 @@ def main() -> None:
                 )
 
     # ========================================================================
-    # 탭 3: 세트 & 스킬 도감
+    # 탭 3: 세트 · 스킬 · 장식주 도감
     # ========================================================================
     with tab_dict:
-        col_sets, col_skills = st.columns(2, gap="medium")
-        with col_sets:
+        dict_sub1, dict_sub2, dict_sub3 = st.tabs(
+            ["💎 장식주 도감", "🥋 방어구 세트 도감", "✨ 전체 스킬 도감"]
+        )
+        with dict_sub1:
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="section-title">💎 전체 장식주 도감 (방어구용 & 무기용)</div>',
+                    unsafe_allow_html=True,
+                )
+                deco_view = decorations_df[
+                    ["name", "kind_kr", "slot", "rarity", "skills_summary", "description"]
+                ].rename(
+                    columns={
+                        "name": "장식주명",
+                        "kind_kr": "장착 구분",
+                        "slot": "필요 슬롯",
+                        "rarity": "레어도",
+                        "skills_summary": "발동 스킬",
+                        "description": "설명",
+                    }
+                )
+                st.dataframe(deco_view, width="stretch", hide_index=True, height=540)
+
+        with dict_sub2:
             with st.container(border=True):
                 st.markdown(
                     '<div class="section-title">🥋 방어구 세트 도감</div>',
@@ -859,7 +945,8 @@ def main() -> None:
                     hide_index=True,
                     height=540,
                 )
-        with col_skills:
+
+        with dict_sub3:
             with st.container(border=True):
                 st.markdown(
                     '<div class="section-title">✨ 전체 스킬 도감</div>',
