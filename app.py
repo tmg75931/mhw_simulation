@@ -410,170 +410,16 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    tab_explorer, tab_builder, tab_dict = st.tabs(
+    tab_builder, tab_explorer, tab_dict = st.tabs(
         [
-            "📜 방어구 스탯 탐색기",
             "⚒️ 커스텀 장비 시뮬레이터",
+            "📜 방어구 스탯 탐색기",
             "📖 방어구 세트 & 스킬 도감",
         ]
     )
 
     # ========================================================================
-    # 탭 1: 방어구 스탯 탐색기 (전체 폭 대형 테이블)
-    # ========================================================================
-    with tab_explorer:
-        with st.container(border=True):
-            f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([2.2, 1.1, 1.1, 1.2, 1.4])
-
-            with f_col1:
-                skill_search = st.text_input(
-                    "스킬 / 방어구 / 세트 검색",
-                    placeholder="예: 약점특효, 도전자, 체술, 고어, 레다우, 알슈...",
-                )
-
-            with f_col2:
-                part_options = ["전체"] + list(PART_KR_MAP.values())
-                selected_part = st.selectbox("장비 부위", options=part_options, index=0)
-
-            with f_col3:
-                rank_options = ["전체"] + list(RANK_KR_MAP.values())
-                selected_rank = st.selectbox("헌터 랭크", options=rank_options, index=0)
-
-            with f_col4:
-                rarity_options = {
-                    0: "전체 레어도",
-                    5: "RARE 5 이상",
-                    6: "RARE 6 이상",
-                    7: "RARE 7 이상",
-                    8: "RARE 8 전용",
-                }
-                min_rarity = st.selectbox(
-                    "최소 레어도",
-                    options=list(rarity_options.keys()),
-                    format_func=lambda k: rarity_options[k],
-                    index=0,
-                )
-
-            with f_col5:
-                sort_options = {
-                    "efficiency_score": "가성비 점수순 (스킬+슬롯)",
-                    "defense_base": "기본 방어력 높은순",
-                    "defense_max": "최대 방어력 높은순",
-                    "slot_score": "슬롯 밸류 높은순",
-                    "res_total": "속성 내성 합계순",
-                }
-                sort_by = st.selectbox(
-                    "정렬 기준",
-                    options=list(sort_options.keys()),
-                    format_func=lambda k: sort_options[k],
-                    index=0,
-                )
-
-        # 필터링 적용
-        filtered_df = armor_df.copy()
-
-        if skill_search.strip():
-            kw = skill_search.strip().lower()
-            filtered_df = filtered_df[
-                filtered_df["skills_summary"].str.lower().str.contains(kw, na=False)
-                | filtered_df["name"].str.lower().str.contains(kw, na=False)
-                | filtered_df["armor_set"].str.lower().str.contains(kw, na=False)
-            ]
-
-        if selected_part != "전체":
-            filtered_df = filtered_df[filtered_df["part_kr"] == selected_part]
-
-        if selected_rank != "전체":
-            filtered_df = filtered_df[filtered_df["rank_kr"] == selected_rank]
-
-        if min_rarity > 0:
-            filtered_df = filtered_df[filtered_df["rarity"] >= min_rarity]
-
-        filtered_df = filtered_df.sort_values(
-            by=[sort_by, "defense_base", "rarity"], ascending=[False, False, False]
-        )
-
-        # 상단 요약 지표 (4열 균등 배치)
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("조회된 방어구", f"{len(filtered_df):,} 개")
-        m2.metric(
-            "최고 가성비 점수 (스킬+슬롯)",
-            f"{filtered_df['efficiency_score'].max()} 점" if not filtered_df.empty else "0 점",
-        )
-        m3.metric(
-            "평균 기본 / 최대 방어력",
-            f"{filtered_df['defense_base'].mean():.0f} / {filtered_df['defense_max'].mean():.0f}"
-            if not filtered_df.empty
-            else "0 / 0",
-        )
-        m4.metric(
-            "최상위 추천 파츠",
-            f"{filtered_df.iloc[0]['name']}" if not filtered_df.empty else "-",
-        )
-
-        if filtered_df.empty:
-            st.info("조건에 일치하는 방어구가 없습니다. 검색어나 필터 조건을 변경해 보세요.")
-        else:
-            with st.container(border=True):
-                st.markdown(
-                    '<div class="section-title">📋 방어구 상세 스탯 목록</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    '<div class="chart-caption">표 상단의 각 컬럼 제목을 클릭하면 오름차순·내림차순으로 정렬할 수 있습니다.</div>',
-                    unsafe_allow_html=True,
-                )
-                display_df = filtered_df[
-                    [
-                        "name",
-                        "armor_set",
-                        "part_kr",
-                        "rank_kr",
-                        "rarity",
-                        "efficiency_score",
-                        "defense_base",
-                        "defense_max",
-                        "slots_str",
-                        "skills_summary",
-                        "res_fire",
-                        "res_water",
-                        "res_thunder",
-                        "res_ice",
-                        "res_dragon",
-                    ]
-                ]
-
-                st.dataframe(
-                    display_df,
-                    width="stretch",
-                    hide_index=True,
-                    height=620,
-                    column_config={
-                        "name": st.column_config.TextColumn("방어구명", width="medium"),
-                        "armor_set": st.column_config.TextColumn("세트명", width="medium"),
-                        "part_kr": st.column_config.TextColumn("부위", width="small"),
-                        "rank_kr": st.column_config.TextColumn("랭크", width="small"),
-                        "rarity": st.column_config.NumberColumn("레어도", format="R%d", width="small"),
-                        "efficiency_score": st.column_config.NumberColumn(
-                            "가성비 점수",
-                            help="보유 스킬 레벨 합 + 장식주 슬롯 레벨 합",
-                            format="%d점",
-                            width="small",
-                        ),
-                        "defense_base": st.column_config.NumberColumn("기본 방어", width="small"),
-                        "defense_max": st.column_config.NumberColumn("최대 방어", width="small"),
-                        "slots_str": st.column_config.TextColumn("장식주 슬롯", width="small"),
-                        "skills_summary": st.column_config.TextColumn("보유 스킬", width="large"),
-                        "res_fire": st.column_config.NumberColumn("🔥 불", width="small"),
-                        "res_water": st.column_config.NumberColumn("💧 물", width="small"),
-                        "res_thunder": st.column_config.NumberColumn("⚡ 번개", width="small"),
-                        "res_ice": st.column_config.NumberColumn("❄️ 얼음", width="small"),
-                        "res_dragon": st.column_config.NumberColumn("🐉 용", width="small"),
-                    },
-                )
-
-    # ========================================================================
-    # 탭 2: 커스텀 장비 시뮬레이터
+    # 탭 1: 커스텀 장비 시뮬레이터
     # ========================================================================
     with tab_builder:
         with st.container(border=True):
@@ -839,6 +685,160 @@ def main() -> None:
                         "레벨 표기": st.column_config.TextColumn("달성 레벨", width="small"),
                         "발동 효과": st.column_config.TextColumn("발동 효과 설명", width="large"),
                         "기여 부위": st.column_config.TextColumn("기여 파츠", width="medium"),
+                    },
+                )
+
+    # ========================================================================
+    # 탭 2: 방어구 스탯 탐색기 (전체 폭 대형 테이블)
+    # ========================================================================
+    with tab_explorer:
+        with st.container(border=True):
+            f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([2.2, 1.1, 1.1, 1.2, 1.4])
+
+            with f_col1:
+                skill_search = st.text_input(
+                    "스킬 / 방어구 / 세트 검색",
+                    placeholder="예: 약점특효, 도전자, 체술, 고어, 레다우, 알슈...",
+                )
+
+            with f_col2:
+                part_options = ["전체"] + list(PART_KR_MAP.values())
+                selected_part = st.selectbox("장비 부위", options=part_options, index=0)
+
+            with f_col3:
+                rank_options = ["전체"] + list(RANK_KR_MAP.values())
+                selected_rank = st.selectbox("헌터 랭크", options=rank_options, index=0)
+
+            with f_col4:
+                rarity_options = {
+                    0: "전체 레어도",
+                    5: "RARE 5 이상",
+                    6: "RARE 6 이상",
+                    7: "RARE 7 이상",
+                    8: "RARE 8 전용",
+                }
+                min_rarity = st.selectbox(
+                    "최소 레어도",
+                    options=list(rarity_options.keys()),
+                    format_func=lambda k: rarity_options[k],
+                    index=0,
+                )
+
+            with f_col5:
+                sort_options = {
+                    "efficiency_score": "가성비 점수순 (스킬+슬롯)",
+                    "defense_base": "기본 방어력 높은순",
+                    "defense_max": "최대 방어력 높은순",
+                    "slot_score": "슬롯 밸류 높은순",
+                    "res_total": "속성 내성 합계순",
+                }
+                sort_by = st.selectbox(
+                    "정렬 기준",
+                    options=list(sort_options.keys()),
+                    format_func=lambda k: sort_options[k],
+                    index=0,
+                )
+
+        # 필터링 적용
+        filtered_df = armor_df.copy()
+
+        if skill_search.strip():
+            kw = skill_search.strip().lower()
+            filtered_df = filtered_df[
+                filtered_df["skills_summary"].str.lower().str.contains(kw, na=False)
+                | filtered_df["name"].str.lower().str.contains(kw, na=False)
+                | filtered_df["armor_set"].str.lower().str.contains(kw, na=False)
+            ]
+
+        if selected_part != "전체":
+            filtered_df = filtered_df[filtered_df["part_kr"] == selected_part]
+
+        if selected_rank != "전체":
+            filtered_df = filtered_df[filtered_df["rank_kr"] == selected_rank]
+
+        if min_rarity > 0:
+            filtered_df = filtered_df[filtered_df["rarity"] >= min_rarity]
+
+        filtered_df = filtered_df.sort_values(
+            by=[sort_by, "defense_base", "rarity"], ascending=[False, False, False]
+        )
+
+        # 상단 요약 지표 (4열 균등 배치)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("조회된 방어구", f"{len(filtered_df):,} 개")
+        m2.metric(
+            "최고 가성비 점수 (스킬+슬롯)",
+            f"{filtered_df['efficiency_score'].max()} 점" if not filtered_df.empty else "0 점",
+        )
+        m3.metric(
+            "평균 기본 / 최대 방어력",
+            f"{filtered_df['defense_base'].mean():.0f} / {filtered_df['defense_max'].mean():.0f}"
+            if not filtered_df.empty
+            else "0 / 0",
+        )
+        m4.metric(
+            "최상위 추천 파츠",
+            f"{filtered_df.iloc[0]['name']}" if not filtered_df.empty else "-",
+        )
+
+        if filtered_df.empty:
+            st.info("조건에 일치하는 방어구가 없습니다. 검색어나 필터 조건을 변경해 보세요.")
+        else:
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="section-title">📋 방어구 상세 스탯 목록</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    '<div class="chart-caption">표 상단의 각 컬럼 제목을 클릭하면 오름차순·내림차순으로 정렬할 수 있습니다.</div>',
+                    unsafe_allow_html=True,
+                )
+                display_df = filtered_df[
+                    [
+                        "name",
+                        "armor_set",
+                        "part_kr",
+                        "rank_kr",
+                        "rarity",
+                        "efficiency_score",
+                        "defense_base",
+                        "defense_max",
+                        "slots_str",
+                        "skills_summary",
+                        "res_fire",
+                        "res_water",
+                        "res_thunder",
+                        "res_ice",
+                        "res_dragon",
+                    ]
+                ]
+
+                st.dataframe(
+                    display_df,
+                    width="stretch",
+                    hide_index=True,
+                    height=620,
+                    column_config={
+                        "name": st.column_config.TextColumn("방어구명", width="medium"),
+                        "armor_set": st.column_config.TextColumn("세트명", width="medium"),
+                        "part_kr": st.column_config.TextColumn("부위", width="small"),
+                        "rank_kr": st.column_config.TextColumn("랭크", width="small"),
+                        "rarity": st.column_config.NumberColumn("레어도", format="R%d", width="small"),
+                        "efficiency_score": st.column_config.NumberColumn(
+                            "가성비 점수",
+                            help="보유 스킬 레벨 합 + 장식주 슬롯 레벨 합",
+                            format="%d점",
+                            width="small",
+                        ),
+                        "defense_base": st.column_config.NumberColumn("기본 방어", width="small"),
+                        "defense_max": st.column_config.NumberColumn("최대 방어", width="small"),
+                        "slots_str": st.column_config.TextColumn("장식주 슬롯", width="small"),
+                        "skills_summary": st.column_config.TextColumn("보유 스킬", width="large"),
+                        "res_fire": st.column_config.NumberColumn("🔥 불", width="small"),
+                        "res_water": st.column_config.NumberColumn("💧 물", width="small"),
+                        "res_thunder": st.column_config.NumberColumn("⚡ 번개", width="small"),
+                        "res_ice": st.column_config.NumberColumn("❄️ 얼음", width="small"),
+                        "res_dragon": st.column_config.NumberColumn("🐉 용", width="small"),
                     },
                 )
 
