@@ -250,6 +250,101 @@ st.markdown(
         color: #785a37;
         margin-bottom: 0.5rem;
     }
+
+    /* =======================================================================
+       📱 모바일 폰 맞춤 반응형 스타일 (화면 폭 768px 이하 스마트폰 최적화)
+       ======================================================================= */
+    @media (max-width: 768px) {
+        /* 모바일 화면 여백 최소화로 가독성 및 화면 활용 극대화 */
+        .block-container {
+            padding: 0.8rem 0.6rem 2rem !important;
+        }
+
+        /* 상단 배너 컴팩트 모바일 레이아웃 */
+        .wilds-hero-banner {
+            padding: 14px 16px !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+            border-radius: 10px !important;
+            margin-bottom: 0.9rem !important;
+        }
+        .wilds-hero-left {
+            gap: 12px !important;
+        }
+        .wilds-emblem {
+            width: 44px !important;
+            height: 44px !important;
+        }
+        .wilds-emblem svg {
+            width: 24px !important;
+            height: 24px !important;
+        }
+        .wilds-title-group .en-label {
+            font-size: 0.68rem !important;
+            letter-spacing: 0.12em !important;
+        }
+        .wilds-title-group h1 {
+            font-size: 1.25rem !important;
+            line-height: 1.3 !important;
+        }
+        .wilds-title-group p {
+            font-size: 0.78rem !important;
+            line-height: 1.35 !important;
+        }
+        .wilds-badge-right {
+            display: inline-block !important;
+            font-size: 0.7rem !important;
+            padding: 3px 8px !important;
+        }
+
+        /* 탭 버튼 터치 영역 및 글자 크기 모바일 최적화 */
+        div[data-baseweb="tab-list"] {
+            gap: 4px !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        button[data-baseweb="tab"] {
+            font-size: 0.86rem !important;
+            padding: 8px 12px !important;
+            white-space: nowrap !important;
+        }
+
+        /* 메트릭 카드 모바일 컴팩트 스타일 */
+        div[data-testid="stMetric"] {
+            min-height: 68px !important;
+            padding: 8px 12px !important;
+            border-left-width: 4px !important;
+        }
+        div[data-testid="stMetricLabel"] p {
+            font-size: 0.76rem !important;
+        }
+        div[data-testid="stMetricValue"] > div {
+            font-size: 1.15rem !important;
+        }
+
+        /* 양피지 카드 패딩 모바일 최적화 */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 8px !important;
+        }
+
+        /* 시뮬레이터 파츠 요약 박스 */
+        .part-info-box {
+            min-height: auto !important;
+            padding: 6px 8px !important;
+            font-size: 0.74rem !important;
+            line-height: 1.35 !important;
+        }
+        .part-card-title {
+            font-size: 0.85rem !important;
+            padding-bottom: 2px !important;
+        }
+
+        /* 차트 상하 여백 모바일 축소 */
+        .js-plotly-plot {
+            margin: 0 auto !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
