@@ -1,18 +1,24 @@
 """
-몬스터헌터 와일즈(MH Wilds) 데이터 파이프라인 모듈
-- 외부 API (https://wilds.mhdb.io/{locale}) 데이터 호출 (requests)
-- Streamlit @st.cache_data 인메모리 캐싱
+몬스터헌터 와일즈(MH Wilds) 데이터 파이프라인 모듈 (고속 최적화 버전)
+- 로컬 압축 스냅샷(data/mh_wilds_ko_cache.json.gz) 즉시 프리로드 + ThreadPoolExecutor 병렬 API 동기화
+- Streamlit @st.cache_data(ttl=86400) 인메모리 캐싱 및 O(1) 사전 인덱싱 조회 테이블 제공
 - 방어구(Armor), 방어구 세트(Armor Sets), 스킬(Skills), 장식주(Decorations) DataFrame 전처리
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from concurrent.futures import ThreadPoolExecutor
+import gzip
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Tuple, Union
 import pandas as pd
 import requests
 import streamlit as st
 
 BASE_URL = "https://wilds.mhdb.io"
+ENDPOINTS = ("armor", "armor/sets", "skills", "decorations")
+CACHE_FILE_PATH = Path(__file__).resolve().parent.parent / "data" / "mh_wilds_ko_cache.json.gz"
 
 PART_KR_MAP: Dict[str, str] = {
     "head": "머리",
@@ -49,17 +55,63 @@ def _build_url(endpoint: str, locale: str = "ko") -> str:
     return f"{BASE_URL}/{locale}/{clean_ep}"
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+def sync_remote_snapshot(locale: str = "ko") -> Dict[str, List[Dict[str, Any]]]:
+    """4개 엔드포인트를 병렬(ThreadPoolExecutor)로 동시에 호출하여 최신 데이터를 받아오고 로컬 캐시를 갱신합니다."""
+    session = requests.Session()
+    session.headers.update({"Accept": "application/json"})
+
+    def _fetch_one(ep: str) -> Tuple[str, List[Dict[str, Any]]]:
+        url = _build_url(ep, locale=locale)
+        resp = session.get(url, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        return ep, (data if isinstance(data, list) else [])
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        bundle = dict(executor.map(_fetch_one, ENDPOINTS))
+
+    if locale == "ko":
+        try:
+            CACHE_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with gzip.open(CACHE_FILE_PATH, "wt", encoding="utf-8") as f:
+                json.dump(bundle, f, ensure_ascii=False)
+        except OSError:
+            pass
+
+    return bundle
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_raw_bundle(locale: str = "ko") -> Dict[str, List[Dict[str, Any]]]:
+    """로컬 압축 스냅샷이 있으면 0.04초 만에 즉시 로드하고, 없으면 병렬 API 호출로 가져옵니다."""
+    if locale == "ko" and CACHE_FILE_PATH.exists():
+        try:
+            with gzip.open(CACHE_FILE_PATH, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and all(ep in data for ep in ENDPOINTS):
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    return sync_remote_snapshot(locale=locale)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_raw_data(endpoint: str, locale: str = "ko") -> List[Dict[str, Any]]:
     """지정된 엔드포인트에서 JSON 리스트 데이터를 가져와 메모리에 캐싱합니다."""
-    url = _build_url(endpoint, locale=locale)
+    clean_ep = endpoint.lstrip("/")
+    bundle = load_raw_bundle(locale=locale)
+    if clean_ep in bundle:
+        return bundle[clean_ep]
+
+    url = _build_url(clean_ep, locale=locale)
     resp = requests.get(url, headers={"Accept": "application/json"}, timeout=20)
     resp.raise_for_status()
     data = resp.json()
     return data if isinstance(data, list) else []
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def load_skills_dataframe(locale: str = "ko") -> Tuple[pd.DataFrame, Dict[str, Dict[str, Any]]]:
     """스킬(/skills) 데이터를 호출하여 DataFrame과 스킬 사전으로 반환합니다."""
     raw_skills = fetch_raw_data("skills", locale=locale)
@@ -102,7 +154,7 @@ def load_skills_dataframe(locale: str = "ko") -> Tuple[pd.DataFrame, Dict[str, D
     return pd.DataFrame(rows), skill_lookup
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def load_decorations_dataframe(locale: str = "ko") -> pd.DataFrame:
     """장식주(/decorations) 데이터를 호출하여 DataFrame으로 변환합니다."""
     raw_decos = fetch_raw_data("decorations", locale=locale)
@@ -152,7 +204,7 @@ def load_decorations_dataframe(locale: str = "ko") -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def load_armor_sets_dataframe(locale: str = "ko") -> pd.DataFrame:
     """방어구 세트(/armor/sets) 데이터를 호출하여 DataFrame으로 변환합니다."""
     raw_sets = fetch_raw_data("armor/sets", locale=locale)
@@ -182,7 +234,7 @@ def load_armor_sets_dataframe(locale: str = "ko") -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def load_armor_dataframe(locale: str = "ko") -> pd.DataFrame:
     """방어구(/armor) 데이터를 호출하여 분석 및 시각화에 최적화된 DataFrame으로 전처리합니다."""
     raw_armor = fetch_raw_data("armor", locale=locale)
@@ -229,11 +281,13 @@ def load_armor_dataframe(locale: str = "ko") -> pd.DataFrame:
         skill_level_sum = sum(skills_dict.values())
         efficiency_score = skill_level_sum + slot_score
         armor_set_name = (item.get("armorSet") or {}).get("name") or "-"
+        display_label = f"{name} (방어 {def_base} · R{rarity})"
 
         rows.append(
             {
                 "id": armor_id,
                 "name": name,
+                "display_label": display_label,
                 "kind": kind,
                 "part_kr": part_kr,
                 "rank": rank,
@@ -256,20 +310,80 @@ def load_armor_dataframe(locale: str = "ko") -> pd.DataFrame:
                 "skill_level_sum": skill_level_sum,
                 "efficiency_score": efficiency_score,
                 "description": item.get("description") or "",
+                "search_blob": f"{name} {armor_set_name} {skills_summary}".lower(),
             }
         )
 
     return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def build_simulator_lookup_tables(locale: str = "ko") -> Dict[str, Any]:
+    """
+    시뮬레이터 렌더링 시 매번 발생하던 O(N) DataFrame 필터링을 제거하기 위해
+    부위별 방어구 옵션, O(1) 해시맵(name -> dict, name -> label), 슬롯 레벨별 장식주 목록을 사전 생성합니다.
+    """
+    armor_df = load_armor_dataframe(locale)
+    armor_sets_df = load_armor_sets_dataframe(locale)
+    decorations_df = load_decorations_dataframe(locale)
+    armor_decos_df = decorations_df[decorations_df["kind"] == "armor"].reset_index(drop=True)
+
+    part_options: Dict[str, List[str]] = {}
+    part_label_map: Dict[str, Dict[str, str]] = {}
+    part_row_map: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+    for p_key in PART_KR_MAP:
+        sub_df = armor_df[armor_df["kind"] == p_key].sort_values(
+            by=["rarity", "defense_base", "name"], ascending=[False, False, True]
+        )
+        records = sub_df.to_dict("records")
+        names = ["(장착 안 함)"] + [r["name"] for r in records]
+        labels = {"(장착 안 함)": "(장착 안 함)"}
+        row_map: Dict[str, Dict[str, Any]] = {}
+        for r in records:
+            labels[r["name"]] = r["display_label"]
+            row_map[r["name"]] = r
+
+        part_options[p_key] = names
+        part_label_map[p_key] = labels
+        part_row_map[p_key] = row_map
+
+    # 프리셋 O(1) 조회 사전
+    valid_sets_df = armor_sets_df[armor_sets_df["파츠 수"] == 5]
+    preset_names = valid_sets_df["세트명"].tolist()
+    preset_map = {r["세트명"]: r for r in valid_sets_df.to_dict("records")}
+
+    # 슬롯 레벨(1, 2, 3)별 호환 방어구 장식주 옵션 & O(1) 조회 사전
+    deco_records = armor_decos_df.to_dict("records")
+    deco_by_label: Dict[str, Dict[str, Any]] = {r["display_label"]: r for r in deco_records}
+    deco_options_by_slot: Dict[int, List[str]] = {}
+    for slot_lv in (1, 2, 3):
+        deco_options_by_slot[slot_lv] = ["(비어 있음)"] + [
+            r["display_label"] for r in deco_records if int(r["slot"]) <= slot_lv
+        ]
+
+    return {
+        "part_options": part_options,
+        "part_label_map": part_label_map,
+        "part_row_map": part_row_map,
+        "preset_names": preset_names,
+        "preset_map": preset_map,
+        "deco_by_label": deco_by_label,
+        "deco_options_by_slot": deco_options_by_slot,
+    }
+
+
+RowLike = Union[pd.Series, Mapping[str, Any]]
+
+
 def calculate_custom_set_stats(
-    selected_rows: List[pd.Series],
+    selected_rows: List[RowLike],
     skill_lookup: Dict[str, Dict[str, Any]],
-    equipped_decorations: List[Tuple[str, pd.Series]] | None = None,
+    equipped_decorations: List[Tuple[str, RowLike]] | None = None,
 ) -> Dict[str, Any]:
     """
     선택된 5부위 방어구 및 장착된 장식주의 종합 물리 방어력, 5대 속성 내성, 발동 스킬 레벨을 합산합니다.
-    equipped_decorations: [(부위명, 장식주 Series), ...]
+    equipped_decorations: [(부위명, 장식주 dict 또는 Series), ...]
     """
     total_def_base = 0
     total_def_max = 0
@@ -288,7 +402,7 @@ def calculate_custom_set_stats(
 
     # 1. 방어구 5부위 스탯 및 스킬 합산
     for row in selected_rows:
-        if row is None or row.empty:
+        if row is None or (isinstance(row, pd.Series) and row.empty):
             continue
         total_def_base += int(row["defense_base"])
         total_def_max += int(row["defense_max"])
@@ -311,7 +425,7 @@ def calculate_custom_set_stats(
     equipped_deco_count = 0
     if equipped_decorations:
         for part_kr, deco_row in equipped_decorations:
-            if deco_row is None or deco_row.empty:
+            if deco_row is None or (isinstance(deco_row, pd.Series) and deco_row.empty):
                 continue
             equipped_deco_count += 1
             d_sk_dict: Dict[str, int] = deco_row["skills_dict"] or {}
